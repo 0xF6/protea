@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>protea-hub</AssemblyName>
+  </PropertyGroup>
+</Project>
