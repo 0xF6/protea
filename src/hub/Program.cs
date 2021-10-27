@@ -2,7 +2,21 @@ using System;
 using System.Device.Spi;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
+using Iot.Device.CpuTemperature;
 using Iot.Device.Nrf24l01;
+
+
+CpuTemperature temp = new CpuTemperature();
+
+
+while (true)
+{
+    await Task.Delay(1000);
+
+    Console.WriteLine(temp.Temperature);
+}
+
 
 SpiConnectionSettings senderSettings = new SpiConnectionSettings(0, 0)
 {

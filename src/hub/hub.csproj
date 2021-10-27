@@ -9,4 +9,7 @@
     <PackageReference Include="System.Device.Gpio" Version="1.6.0-prerelease.21520.3" />
     <PackageReference Include="System.Drawing.Common" Version="6.0.0-rtm.21518.12" />
   </ItemGroup>
+  <ItemGroup>
+    <DotNetCliToolReference Include="DotnetPublishSsh" Version="0.1.0" />
+  </ItemGroup>
 </Project>
