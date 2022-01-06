@@ -22,7 +22,7 @@ class MICS6814
 public:
 	MICS6814(int pinCO, int pinNO2, int pinNH3);
 
-	void calibrate();
+	void calibrate(int pinPulse);
 	void loadCalibrationData(
 		uint16_t base_NH3,
 		uint16_t base_RED,

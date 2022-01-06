@@ -7,11 +7,22 @@ MICS6814::MICS6814(int pinCO, int pinNO2, int pinNH3)
 	_pinNH3 = pinNH3;
 }
 
-void MICS6814::calibrate()
+#define PTIME 30
+void pulse(int pin, int times) {
+  do {
+    digitalWrite(pin, HIGH);
+    delay(PTIME);
+    digitalWrite(pin, LOW);
+    delay(PTIME);
+  }
+  while (times--);
+}
+
+void MICS6814::calibrate(int pinPulse)
 {
 	uint8_t seconds = 10;
 
-	uint8_t delta = 2;
+	uint8_t delta = 20;
 
 	uint16_t bufferNH3[seconds];
 	uint16_t bufferCO[seconds];
@@ -44,6 +55,8 @@ void MICS6814::calibrate()
 	{
 		delay(1000);
 
+    pulse(pinPulse, 10);
+
 		unsigned long rs = 0;
 
 		delay(50);
@@ -55,7 +68,7 @@ void MICS6814::calibrate()
 
 		curNH3 = rs / 3;
 		rs = 0;
-
+    pulse(pinPulse, 10);
 		delay(50);
 		for (int i = 0; i < 3; i++)
 		{
@@ -65,7 +78,7 @@ void MICS6814::calibrate()
 
 		curCO = rs / 3;
 		rs = 0;
-
+    pulse(pinPulse, 10);
 		delay(50);
 		for (int i = 0; i < 3; i++)
 		{
@@ -81,7 +94,7 @@ void MICS6814::calibrate()
 
 		bufferNH3[pntrNH3] = curNH3;
 		bufferCO[pntrCO]   = curCO;
-		bufferNO2[pntrNO2] = curNO2; 
+		bufferNO2[pntrNO2] = curNO2;
 
 		isStableNH3 = abs(fltSumNH3 / seconds - curNH3) < delta;
 		isStableCO  = abs(fltSumCO  / seconds - curCO)  < delta;
@@ -90,6 +103,10 @@ void MICS6814::calibrate()
 		pntrNH3 = (pntrNH3 + 1) % seconds;
 		pntrCO  = (pntrCO  + 1) % seconds;
 		pntrNO2 = (pntrNO2 + 1) % seconds;
+    pulse(pinPulse, 10);
+    Serial.print("NH3: " + String(abs(fltSumNH3 / seconds - curNH3)) + ", CO2: "
+    + String(abs(fltSumCO / seconds - curCO)) + ", NO2: "
+    + String(abs(fltSumNO2 / seconds - curNO2)) + "\n");
 	} while (!isStableNH3 || !isStableCO || !isStableNO2);
 
 	_baseNH3 = fltSumNH3 / seconds;
