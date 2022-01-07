@@ -1,12 +1,13 @@
-#define SERIAL_DEBUG 1
+#define SERIAL_DEBUG
 #include <Arduino.h>
-#include "MICS6814.h"
+//#include "MICS6814.h"
 #include "RF24.h"
 #include "pin-api.h"
 #define CE 9
 #define CSN 10
 void printf_begin(void);
 
+void pulse(int pin, int times);
 
 enum {
   PACKAGE_TEMPERATURE,
@@ -23,7 +24,7 @@ const int num_reps = 100;
 #define PIN_NH3 6
 #define PIN_NO3 7
 
-MICS6814 misc(PIN_CO2, PIN_NO3, PIN_NH3);
+//MICS6814 misc(PIN_CO2, PIN_NO3, PIN_NH3);
 
 struct Payload {
   int pkgID;
@@ -32,18 +33,27 @@ struct Payload {
 
 void setup() {
   pinMode(A1, OUTPUT);
-  Serial.begin(4800);
+  pinMode(A2, OUTPUT);
+  Serial.begin(2400);
   printf_begin();
   radio.begin();
   radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_LOW);
-  radio.setCRCLength(RF24_CRC_16);
+  radio.setDataRate(RF24_2MBPS);
+  radio.setPALevel(RF24_PA_MAX);
   radio.setPayloadSize(sizeof(Payload));
-  radio.startListening();
-  radio.printDetails();
-  delay(5000);
-  radio.stopListening();
+  radio.printPrettyDetails();
+  bool isOk = false;
+  bool isFail = false;
+  bool isReady = false;
+  radio.whatHappened(isOk, isFail, isReady);
+  if (isOk) Serial.println("IS OK");
+  if (isFail) Serial.println("IS FAIL");
+  if (isReady) Serial.println("IS READY");
+  //radio.startListening();
+  //radio.printDetails();
+  //delay(5000);
+  //radio.stopListening();
+  /*
   int i = 0;
   while ( i < num_channels )  {
     printf("%x", i >> 4);
@@ -56,11 +66,11 @@ void setup() {
     ++i;
   }
   printf("\a");
-
-  radio.setChannel(0x30);
+*/
+  radio.setChannel(0x10);
   radio.openWritingPipe(0x01F3F5F78FLL);
 
-  misc.calibrate(A3);
+  //misc.calibrate(A3);
 }
 
 void loop(void)
@@ -71,14 +81,17 @@ void loop(void)
   a.pkgID = PACKAGE_TEMPERATURE;
   a.data = 24;
   if (radio.write(&a, sizeof(Payload)))
+  {
     Serial.println("Success transmitting payload.");
+    pulse(A2, 10);
+  }
   else
     Serial.println("Failed transmitting payload.");
   digitalWrite(A1, 0);
   radio.powerDown();
   delay(5000);
 
-  Serial.println("CO2: " + String(misc.measure(CO)) + ", NH3:" + String(misc.measure(NH3)) + ", N02: " + String(misc.measure(NO2)));
+  //Serial.println("CO2: " + String(misc.measure(CO)) + ", NH3:" + String(misc.measure(NH3)) + ", N02: " + String(misc.measure(NO2)));
 }
 int serial_putc( char c, FILE * ) {
   Serial.write( c );
