@@ -1,4 +1,5 @@
 #define SERIAL_DEBUG
+#define RFNANO 1
 #define HUMIDITY 1
 
 
@@ -8,20 +9,25 @@
 #include "RF24.h"
 #include "pin-api.h"
 #include <GyverPower.h>
-
-#define CE 9
-#define CSN 10
+#include "printf.h"
+#define CE 7
+#define CSN 8
 
 
 #define RF_POWER A5
 #define LED_AWAIT A1
 #define LED_RELAY A2
+#ifdef RFNANO
+#define LED_STATUS LED_BUILTIN
+#elif
 #define LED_STATUS A3
-
+#endif
 
 #ifdef HUMIDITY
 
 #define DHTTYPE DHT21
+#include <OneWire.h>
+#include <Wire.h>
 #include "DHT.h"
 
 #define DHTPIN 7
@@ -29,6 +35,8 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 #endif
+
+
 
 
 void pulse(int pin, int times);
@@ -39,7 +47,7 @@ enum {
   PACKAGE_CO2
 };
 
-RF24 radio(CE, CSN);
+RF24 radio(9, 10);
 const uint8_t num_channels = 128;
 uint8_t values[num_channels];
 const int num_reps = 100;
@@ -59,6 +67,7 @@ bool usePowerManagement = false;
 
 
 void signal_await() {
+
   static volatile bool flag = false;
 
   flag = !flag;
@@ -68,13 +77,13 @@ void signal_await() {
 void signal_status() {
   static volatile bool flag_status = false;
 
-  flag = !flag;
+  flag_status = !flag_status;
 
-  digitalWrite(LED_STATUS, flag ? HIGH : LOW);
+  digitalWrite(LED_STATUS, flag_status ? HIGH : LOW);
 }
 
 
-signal_error() {
+void signal_error() {
   for (int i = 0; i != 100; i++)
   {
     digitalWrite(LED_STATUS, HIGH);
@@ -86,23 +95,31 @@ signal_error() {
 
 void setup_power()
 {
-  signal_await();
   if (!usePowerManagement)
     return;
-  power.autoCalibrate();
-  power.setSleepMode(STANDBY_SLEEP);
-  power.bodInSleep(true);
-  signal_await();
+  //signal_await();
+  //power.autoCalibrate();
+  //power.setSleepMode(STANDBY_SLEEP);
+  //power.bodInSleep(true);
+  //signal_await();
 }
 
 void setupRf()
 {
   signal_await();
-  radio.begin();
+
+  if (!radio.begin()) {
+    Serial.println(F("radio hardware is not responding!!"));
+    signal_error();
+    //while (1) {} // hold in infinite loop
+  }
   radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_HIGH);
+  //radio.setDataRate(RF24_1MBPS);
+  //radio.setPALevel(RF24_PA_HIGH);
   radio.setPayloadSize(sizeof(Payload));
+  #ifdef RFNANO
+  //radio.printDetails();
+  #endif
 
   radio.setChannel(0x10);
   radio.openWritingPipe(0x01F3F5F78FLL);
@@ -113,12 +130,16 @@ void setupRf()
 void record_metrics() {
   signal_await();
   #ifdef HUMIDITY
-  delay(7000);
-  dht.begin();
+  delay(3000);
+  //dht.begin();
 
   float hum = dht.readHumidity();
 
   float temp = dht.readTemperature();
+
+  Serial.print(hum);
+  Serial.print(", ");
+  Serial.println(temp);
 
   if (isnan(temp) || isnan(hum))
     return;
@@ -127,36 +148,42 @@ void record_metrics() {
   signal_await();
 }
 
-void power_sleep()
+void powerSleep()
 {
   radio.powerDown();
   delay(50);
-  digitalWrite(RF_POWER, LOW); // enable 5v -> 3.3v
+  digitalWrite(RF_POWER, LOW); // disable 5v -> 3.3v
   if (usePowerManagement)
     power.sleepDelay(20 * 1000);
   else
-    delay(20 * 1000);
-  digitalWrite(RF_POWER, HIGH); // disable 5v -> 3.3v
+    delay(2 * 1000);
+  digitalWrite(RF_POWER, HIGH); // enable 5v -> 3.3v
   delay(50);
   radio.powerUp();
 }
+OneWire ds();
 
 
 void setup() {
-  pinMode(LED_AWAIT, OUTPUT);
-  pinMode(LED_RELAY, OUTPUT);
+  #ifdef RFNANO
+  Serial.begin(9600);
+  printf_begin();
+  #endif
+  //pinMode(LED_AWAIT, OUTPUT);
+  //pinMode(LED_RELAY, OUTPUT);
   pinMode(LED_STATUS, OUTPUT);
 
   setup_power();
-  setupRf();
+  //setupRf();
 
-  pinMode(A1, OUTPUT);
-  pinMode(A2, OUTPUT);
+  dht.begin();
+
+  Serial.println("humidity, temperature");
 }
-
 void loop(void)
 {
-  Payload a;
+  record_metrics();
+  /*Payload a;
   a.pkgID = PACKAGE_TEMPERATURE;
   a.data = 24;
   if (radio.write(&a, sizeof(Payload)))
@@ -167,9 +194,9 @@ void loop(void)
   else
     Serial.println("Failed transmitting payload.");
   digitalWrite(A1, 0);
-  delay(5000);
+  delay(5000);*/
 
-  power_sleep();
+  //power_sleep();
 }
 
 
