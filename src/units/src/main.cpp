@@ -41,109 +41,8 @@ void signal_error(int pin = -1, int count = 10)
   }
 }
 
-const uint8_t num_channels = 126;
-uint8_t values[num_channels];
-const int num_reps = 100;
-bool constCarrierMode = 0;
-
 #ifdef SERVER
-
-void setupRf()
-{
-  if (!radio.begin())
-  {
-    Serial.println(F("radio hardware is not responding!!"));
-
-    while (1)
-    {
-      signal_error();
-    } // hold in infinite loop
-  }
-  radio.setCRCLength(RF24_CRC_DISABLED);
-  radio.disableCRC();
-  radio.disableAckPayload();
-  radio.setAutoAck(false);
-  radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_MIN);
-  radio.setPayloadSize(sizeof(Payload));
-
-  radio.setChannel(0);
-  radio.openReadingPipe(0, 0xB3B4B5B60FLL);
-  radio.openReadingPipe(1, 0xB4B4B5B60FLL);
-  radio.openReadingPipe(2, 0xB5B4B5B60FLL);
-  radio.openReadingPipe(3, 0xB6B4B5B60FLL);
-  radio.startListening();
-  radio.printDetails();
-}
-
-void setup()
-{
-  Serial.begin(9600);
-  printf_begin();
-  // pinMode(LED_AWAIT, OUTPUT);
-  // pinMode(LED_RELAY, OUTPUT);
-  pinMode(LED_STATUS, OUTPUT);
-
-  setupRf();
-}
-void error()
-{
-  Serial.println("No data");
-  digitalWrite(LED_STATUS, HIGH);
-  delay(1200);
-  digitalWrite(LED_STATUS, LOW);
-  delay(1200);
-}
-void loop(void)
-{
-  uint8_t pipe;
-  if (!radio.available(&pipe))
-  {
-    delay(10);
-    // error();
-    return;
-  }
-  else
-  {
-    Payload a;
-    radio.read(&a, sizeof(Payload));
-
-    Serial.print(F("Received "));
-    Serial.print(pipe);
-    Serial.print(F(": "));
-    switch (a.pkgID)
-    {
-      case PACKAGE_TEMPERATURE:
-        Serial.print(F("TEMPERATURE"));
-        break;
-      case PACKAGE_HUMIDITY:
-        Serial.print(F("HUMIDITY"));
-        break;
-      default:
-        break;
-    }
-
-    Serial.print(F(", "));
-    Serial.println(a.data);
-    delay(700);
-  }
-
-  /*
-  Payload a;
-  a.pkgID = PACKAGE_TEMPERATURE;
-  a.data = 24;
-  if (radio.write(&a, sizeof(Payload)))
-  {
-    Serial.println("Success transmitting payload.");
-    pulse(A2, 10);
-  }
-  else
-    Serial.println("Failed transmitting payload.");
-  digitalWrite(A1, 0);
-  delay(5000);*/
-
-  // power_sleep();
-}
+#include "server.h"
 #endif
 #ifdef CLIENT
 #define SERIAL_DEBUG
@@ -209,17 +108,13 @@ void setupRf()
   delay(1500);
   if (!radio.begin())
   {
-    Serial.println(F("radio hardware is not responding!!"));
-
     while (1)
     {
       signal_error(LED_STATUS, 3);
-      // signal_error(LED_RELAY, 1);
-      // signal_error(LED_AWAIT, 3);
       Serial.println(F("radio hardware is not responding!!"));
       if (radio.begin())
         break;
-    } // hold in infinite loop
+    }
   }
   radio.disableAckPayload();
   radio.setAutoAck(false);
@@ -231,7 +126,6 @@ void setupRf()
 
   radio.setChannel(0);
   radio.openWritingPipe(0xB3B4B5B60FLL);
-  Serial.println("rf ok");
 }
 
 void record_metrics(float *hum, float *temp)
@@ -259,8 +153,6 @@ void record_metrics(float *hum, float *temp)
 
 void powerSleep()
 {
-  Serial.println("sleep-power1");
-
   radio.powerDown();
   delay(50);
   delay(50);
@@ -278,7 +170,6 @@ void powerSleep()
 void setup()
 {
   Serial.begin(9600);
-  Serial.println("setup");
   pinMode(LED_AWAIT, OUTPUT);
   pinMode(LED_RELAY, OUTPUT);
   pinMode(LED_STATUS, OUTPUT);
@@ -340,27 +231,4 @@ void loop(void)
 
   powerSleep();
 }
-
-/*
-
-void setup()
-{
-  pinMode(A1, OUTPUT);
-  pinMode(A2, OUTPUT);
-  pinMode(A3, OUTPUT);
-}
-void loop(void)
-{
-  digitalWrite(A1, 1);   // turn the LED on (HIGH is the voltage level)
-  digitalWrite(A2, 1);
-  digitalWrite(A3, 1);
-  delay(50);                       // wait for a second
-  analogWrite(A1, LOW);    // turn the LED off by making the voltage LOW
-  delay(50);                       // wait for a second
-  analogWrite(A2, LOW);
-  delay(50);                       // wait for a second
-  analogWrite(A3, LOW);
-  delay(50);
-}
-*/
 #endif
