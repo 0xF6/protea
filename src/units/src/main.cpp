@@ -1,4 +1,4 @@
-#define SERVER
+#define CLIENT
 #include <Arduino.h>
 #include "RF24.h"
 #include "printf.h"
@@ -8,6 +8,10 @@
 #else
 #define LED_STATUS LED_BUILTIN
 #endif
+
+#include "vcc.h"
+vcc voltage;
+
 RF24 radio(9, 10, 10000000U / 10);
 
 enum
@@ -21,8 +25,11 @@ enum
 struct Payload
 {
   byte hash_0;
-  int pkgID;
-  float data;
+  byte type;
+  float temp;
+  float hum;
+  float co2;
+  float volt;
   byte hash_1;
 };
 #define PAYLOAD_HASH_0 12
@@ -42,7 +49,89 @@ void signal_error(int pin = -1, int count = 10)
 }
 
 #ifdef SERVER
-#include "server.h"
+
+void setupRf()
+{
+  if (!radio.begin())
+  {
+    Serial.println(F("radio hardware is not responding!!"));
+
+    while (1)
+    {
+      signal_error();
+    } // hold in infinite loop
+  }
+  radio.setCRCLength(RF24_CRC_DISABLED);
+  radio.disableCRC();
+  radio.disableAckPayload();
+  radio.setAutoAck(false);
+  radio.setDataRate(RF24_250KBPS);
+  radio.setPALevel(RF24_PA_HIGH);
+  radio.setPayloadSize(sizeof(Payload));
+
+  radio.setChannel(0);
+  radio.openReadingPipe(0, 0xB0B4B5B60FLL);
+  radio.openReadingPipe(1, 0xB1B4B5B60FLL);
+  radio.openReadingPipe(2, 0xB2B4B5B60FLL);
+  radio.openReadingPipe(3, 0xB3B4B5B60FLL);
+  radio.openReadingPipe(4, 0xB4B4B5B60FLL);
+  radio.openReadingPipe(5, 0xB5B4B5B60FLL);
+
+  radio.startListening();
+  Serial.println(F("TEMPERATURE, HUMIDITY, VOLTAGE, CO2"));
+}
+void setup()
+{
+  Serial.begin(9600);
+  printf_begin();
+  pinMode(A2, INPUT);
+  pinMode(A3, INPUT);
+  pinMode(A4, INPUT);
+  // pinMode(LED_AWAIT, OUTPUT);
+  // pinMode(LED_RELAY, OUTPUT);
+  pinMode(LED_STATUS, OUTPUT);
+
+  setupRf();
+}
+void error()
+{
+  // Serial.println("No data");
+  digitalWrite(LED_STATUS, HIGH);
+  delay(1200);
+  digitalWrite(LED_STATUS, LOW);
+  delay(1200);
+}
+
+
+void loop(void)
+{
+  uint8_t pipe;
+  if (!radio.available(&pipe))
+  {
+    delay(10);
+    // error();
+    return;
+  }
+  else
+  {
+    Payload a;
+    radio.read(&a, sizeof(Payload));
+
+    if (a.hash_0 != PAYLOAD_HASH_0 || a.hash_1 != PAYLOAD_HASH_1)
+      return;
+
+    Serial.print(a.temp);
+    Serial.print(F(", "));
+    Serial.print(a.hum);
+    Serial.print(F(", "));
+    Serial.print(a.volt);
+    Serial.print(F(", "));
+    Serial.println(a.co2);
+
+
+    delay(700);
+  }
+}
 #endif
 #ifdef CLIENT
 #define SERIAL_DEBUG
@@ -58,11 +147,16 @@ void signal_error(int pin = -1, int count = 10)
 
 #ifdef HUMIDITY
 
-#define DHTTYPE DHT21
+
 #include <OneWire.h>
 #include <Wire.h>
-#include "DHT.h"
 
+
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+#define DHTTYPE DHT21
 #define DHTPIN 7
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -72,6 +166,23 @@ DHT dht(DHTPIN, DHTTYPE);
 #define PIN_CO2 5
 #define PIN_NH3 6
 #define PIN_NO3 7
+
+
+#define PWR_ALL 0xFFFF
+#define PWR_USB _BV(15)
+#define PWR_TIMER5 _BV(13)
+#define PWR_TIMER4 _BV(12)
+#define PWR_TIMER3 _BV(11)
+#define PWR_UART3 _BV(10)
+#define PWR_UART2 _BV(9)
+#define PWR_UART1 _BV(8)
+#define PWR_I2C _BV(7)
+#define PWR_TIMER2 _BV(6)
+#define PWR_TIMER0 _BV(5)
+#define PWR_TIMER1 _BV(3)
+#define PWR_SPI _BV(2)
+#define PWR_UART0 _BV(1)
+#define PWR_ADC _BV(0)
 
 // MICS6814 misc(PIN_CO2, PIN_NO3, PIN_NH3);
 
@@ -96,10 +207,14 @@ void setup_power()
   if (!usePowerManagement)
     return;
   signal_await();
-  Serial.println("power1");
   power.autoCalibrate();
+power.hardwareDisable(
+    PWR_ADC |
+    PWR_UART0	 |
+    PWR_I2C	  |
+    PWR_USB); // disable all hardware
   power.setSleepMode(POWERDOWN_SLEEP);
-  power.bodInSleep(true);
+  power.bodInSleep(false);
   signal_await();
 }
 
@@ -121,11 +236,11 @@ void setupRf()
   radio.setCRCLength(RF24_CRC_DISABLED);
   radio.disableCRC();
   radio.setDataRate(RF24_250KBPS);
-  radio.setPALevel(RF24_PA_MIN);
+  radio.setPALevel(RF24_PA_HIGH);
   radio.setPayloadSize(sizeof(Payload));
 
   radio.setChannel(0);
-  radio.openWritingPipe(0xB3B4B5B60FLL);
+  radio.openWritingPipe(0xB0B4B5B60FLL);
 }
 
 void record_metrics(float *hum, float *temp)
@@ -158,7 +273,10 @@ void powerSleep()
   delay(50);
   digitalWrite(RF_POWER, LOW); // disable 5v -> 3.3v
   if (usePowerManagement)
-    power.sleepDelay(20 * 1000);
+  {
+    power.sleepDelay(30 * 1000);
+    power.sleepDelay(30 * 1000);
+  }
   else
     delay(2 * 1000);
   digitalWrite(RF_POWER, HIGH); // enable 5v -> 3.3v
@@ -166,6 +284,8 @@ void powerSleep()
   setupRf();
   radio.powerUp();
 }
+
+Payload a;
 
 void setup()
 {
@@ -193,30 +313,37 @@ void setup()
 
   digitalWrite(LED_AWAIT, LOW);
   delay(1000);
+  a.hash_0 = PAYLOAD_HASH_0;
+  a.hash_1 = PAYLOAD_HASH_1;
 }
+
+
+
 void loop(void)
 {
   float temp = -1;
   float hum = -1;
   record_metrics(&hum, &temp);
-  Payload a;
-  a.pkgID = PACKAGE_TEMPERATURE;
-  a.data = temp;
+
+  power.hardwareEnable(PWR_ADC);
+  delayMicroseconds(250);
+  a.volt = voltage.read_volts();
+
+
+  a.co2 = -1;
+  a.hum = hum;
+  a.temp = temp;
+
+  power.hardwareDisable(PWR_ADC);
+
 
   bool result = radio.write(&a, sizeof(Payload));
-
-  a.pkgID = PACKAGE_HUMIDITY;
-  a.data = hum;
-
-  delay(500);
-
-  result &= radio.write(&a, sizeof(Payload));
 
   if (result)
   {
     digitalWrite(LED_RELAY, HIGH);
     Serial.println("Success transmitting payload.");
-    delay(1500);
+    delay(500);
   }
   else
   {
