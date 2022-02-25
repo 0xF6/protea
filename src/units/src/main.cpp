@@ -12,7 +12,7 @@
 #include "vcc.h"
 vcc voltage;
 
-RF24 radio(9, 10, 10000000U / 10);
+RF24 radio(9, 10, 10000000U);
 
 enum
 {
@@ -61,23 +61,26 @@ void setupRf()
       signal_error();
     } // hold in infinite loop
   }
-  radio.setCRCLength(RF24_CRC_DISABLED);
-  radio.disableCRC();
+  printf_begin();
+  radio.setCRCLength(RF24_CRC_8);
+  //radio.disableCRC();
   radio.disableAckPayload();
   radio.setAutoAck(false);
   radio.setDataRate(RF24_250KBPS);
   radio.setPALevel(RF24_PA_HIGH);
-  radio.setPayloadSize(sizeof(Payload));
+  radio.setPayloadSize(sizeof(byte));
 
   radio.setChannel(0);
-  radio.openReadingPipe(0, 0xB0B4B5B60FLL);
-  radio.openReadingPipe(1, 0xB1B4B5B60FLL);
-  radio.openReadingPipe(2, 0xB2B4B5B60FLL);
-  radio.openReadingPipe(3, 0xB3B4B5B60FLL);
-  radio.openReadingPipe(4, 0xB4B4B5B60FLL);
-  radio.openReadingPipe(5, 0xB5B4B5B60FLL);
+  radio.openReadingPipe(0, 0xAAAAAAAAAALL);
+  radio.openReadingPipe(1, 0xBFB4B5B601LL);
+  radio.openReadingPipe(2, 0xBFB4B5B602LL);
+  radio.openReadingPipe(3, 0xBFB4B5B603LL);
+  radio.openReadingPipe(4, 0xBFB4B5B604LL);
+  radio.openReadingPipe(5, 0xBFB4B5B605LL);
 
   radio.startListening();
+  radio.printPrettyDetails();
+  radio.printDetails();
   Serial.println(F("TEMPERATURE, HUMIDITY, VOLTAGE, CO2"));
 }
 void setup()
@@ -114,6 +117,7 @@ void loop(void)
   }
   else
   {
+    /*
     Payload a;
     radio.read(&a, sizeof(Payload));
 
@@ -126,9 +130,22 @@ void loop(void)
     Serial.print(F(", "));
     Serial.print(a.volt);
     Serial.print(F(", "));
-    Serial.println(a.co2);
-
-
+    Serial.println(a.co2);*/
+    uint8_t pipe;
+    if(radio.available(&pipe)) {
+      byte a;
+      radio.read(&a, sizeof(byte));
+      Serial.print("PIPE: ");
+      Serial.print(pipe);
+      Serial.print(" DATA: ");
+      Serial.println(a);
+      Serial.print("Payload: ");
+      Serial.println((byte)sizeof(Payload));
+      Serial.print("Float: ");
+      Serial.println((byte)sizeof(float));
+      Serial.print("Byte: ");
+      Serial.println((byte)sizeof(byte));
+    }
     delay(700);
   }
 }
@@ -231,16 +248,14 @@ void setupRf()
         break;
     }
   }
-  radio.disableAckPayload();
-  radio.setAutoAck(false);
-  radio.setCRCLength(RF24_CRC_DISABLED);
-  radio.disableCRC();
+  radio.setCRCLength(RF24_CRC_8);
   radio.setDataRate(RF24_250KBPS);
   radio.setPALevel(RF24_PA_HIGH);
   radio.setPayloadSize(sizeof(Payload));
 
   radio.setChannel(0);
-  radio.openWritingPipe(0xB0B4B5B60FLL);
+  //radio.openWritingPipe(0xBFB4B5B600LL);
+  radio.openWritingPipe(0xAAAAAAAAAALL);
 }
 
 void record_metrics(float *hum, float *temp)
@@ -270,8 +285,8 @@ void powerSleep()
 {
   radio.powerDown();
   delay(50);
-  delay(50);
   digitalWrite(RF_POWER, LOW); // disable 5v -> 3.3v
+  delay(50);
   if (usePowerManagement)
   {
     power.sleepDelay(30 * 1000);
@@ -301,7 +316,7 @@ void setup()
 
   delay(2000);
   printf_begin();
-  setup_power();
+  //setup_power();
   setupRf();
   radio.printDetails();
 
@@ -325,7 +340,7 @@ void loop(void)
   float hum = -1;
   record_metrics(&hum, &temp);
 
-  power.hardwareEnable(PWR_ADC);
+  //power.hardwareEnable(PWR_ADC);
   delayMicroseconds(250);
   a.volt = voltage.read_volts();
 
@@ -334,7 +349,7 @@ void loop(void)
   a.hum = hum;
   a.temp = temp;
 
-  power.hardwareDisable(PWR_ADC);
+  //power.hardwareDisable(PWR_ADC);
 
 
   bool result = radio.write(&a, sizeof(Payload));
@@ -348,14 +363,14 @@ void loop(void)
   else
   {
     Serial.println("Failed transmitting payload.");
-    signal_error(LED_STATUS, 10);
+    signal_error(LED_STATUS, 2);
     delay(1000);
   }
-  delay(1500);
+  //delay(1500);
   digitalWrite(LED_RELAY, 0);
   digitalWrite(LED_STATUS, 0);
   delay(1500);
 
-  powerSleep();
+  //powerSleep();
 }
 #endif
