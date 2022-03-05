@@ -398,10 +398,7 @@ namespace NRF24L01Plus
         /// Returns crc length (in bits)
         /// </summary>
         /// <returns></returns>
-        public CRCLength GetCRCLength()
-        {
-            return Nrf24L01Config.Read(this).CRCLength;
-        }
+        public CRCLength GetCRCLength() => Nrf24L01Config.Read(this).CRCLength;
 
         /// <summary>
         /// Set PA (Power Amplification) level
@@ -499,21 +496,17 @@ namespace NRF24L01Plus
         /// </summary>
         public void EnableAckPayload()
         {
-            byte setting = (byte) (ReadRegister(FEATURE) | (1 << EN_ACK_PAY) | (1 << EN_DPL));
+            var setting = (byte) (ReadRegister(FEATURE) | (1 << EN_ACK_PAY) | (1 << EN_DPL));
 
             WriteRegister(FEATURE, setting);
-
-            // if initial operation failed, aparently features are disabled
+            
             if (ReadRegister(FEATURE) == 0)
             {
-                // Enable them and try again
                 ToggleFeatures();
                 setting = (byte) (ReadRegister(FEATURE) | (1 << EN_ACK_PAY) | (1 << EN_DPL));
 
                 WriteRegister(FEATURE, setting);
             }
-
-            //enable dynamic payloads on pipes 0 and 1
             setting = (byte) (ReadRegister(DYNPD) | (1 << DPL_P1) | (1 << DPL_P0));
             WriteRegister(DYNPD, setting);
         }
